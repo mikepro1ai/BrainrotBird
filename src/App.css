@@ -27,3 +27,104 @@ button {
 button:hover {
   background-color: #45a049;
 } 
+.level-up-container {
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle, rgba(255,255,255,0.1), transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  mix-blend-mode: screen;
+}
+
+.level-up-bg {
+  position: relative;
+  animation: pulseGlow 2s ease-in-out;
+}
+
+.level-up-text {
+  font-size: 96px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #00ffe7;
+  text-shadow:
+    0 0 20px #00ffe7,
+    0 0 40px #00ffe7,
+    0 0 80px #ff00f7,
+    0 0 160px #fffb00;
+  animation:
+    flicker 0.1s infinite alternate,
+    explode 0.6s ease-out,
+    glitch 0.8s infinite;
+  font-family: 'Orbitron', sans-serif;
+}
+
+@keyframes flicker {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.8;
+  }
+}
+
+@keyframes explode {
+  0% {
+    transform: scale(0.2) rotate(-30deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes glitch {
+  0% {
+    text-shadow: 2px 2px #ff00f7, -2px -2px #00ffe7;
+  }
+  25% {
+    text-shadow: -2px 2px #00ffe7, 2px -2px #fffb00;
+  }
+  50% {
+    text-shadow: 2px -2px #ff00f7, -2px 2px #00ffe7;
+  }
+  75% {
+    text-shadow: -2px -2px #fffb00, 2px 2px #ff00f7;
+  }
+  100% {
+    text-shadow: 0 0 10px #00ffe7;
+  }
+}
+
+@keyframes shockwave {
+  0% {
+    transform: translateX(-50%) scale(0.5);
+    opacity: 1;
+    filter: blur(2px);
+  }
+  100% {
+    transform: translateX(-50%) scale(1.5);
+    opacity: 0;
+    filter: blur(10px);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px #00ffe7, 0 0 30px #ff00f7, 0 0 50px #fffb00;
+  }
+  50% {
+    box-shadow: 0 0 30px #ff00f7, 0 0 60px #fffb00, 0 0 100px #00ffe7;
+  }
+}
+.level-up-text {
+  font-size: 96px;
+  font-family: 'Orbitron', sans-serif;
+  color: red; /* auffällig für Test */
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&display=swap');
+
+/* Danach deine Animationen und Klassen */

@@ -4,13 +4,24 @@ import Pipe from './Pipe';
 import gameOverSound from '../assets/bruh.mp3';
 import collisionSound from '../assets/wetfart.mp3';
 import backgroundMusic from '../assets/BasshunterDotA8bit.mp3';
+import levelUpSound from '../assets/level-up.mp3';
 
 const GRAVITY = 0.5;
 const JUMP_FORCE = -6.4;
 const PIPE_GAP = 173;
-const PIPE_INTERVAL = 2000;
+const NORMAL_PIPE_INTERVAL = 2000;
+const ADVANCED_PIPE_INTERVAL = 1800;
 const BASE_PIPE_SPEED = 5;
-const SPEED_INCREASE = 0.025; // 2.5% increase per pipe
+const SPEED_INCREASE_PER_LEVEL = 0.25;
+const POINTS_PER_PIPE = 10;
+const POINTS_FOR_LEVEL_UP = 50;
+const ADVANCED_MODE_LEVEL = 3;
+const ADVANCED_SPEED_BOOST = 0.2;
+const NORMAL_PIPE_SPACING = 800;
+const ADVANCED_PIPE_SPACING = 980;
+const ADVANCED_DOUBLE_PIPE_SPACING = 1274;
+const DOUBLE_PIPE_CHANCE = 0.2;
+const MAX_PIPES_ADVANCED = 4;
 
 // Create a single music instance outside the component
 const backgroundMusicInstance = new Audio(backgroundMusic);
@@ -20,22 +31,30 @@ backgroundMusicInstance.volume = 0.5;
 const Game: React.FC = () => {
   const [birdPosition, setBirdPosition] = useState(250);
   const [velocity, setVelocity] = useState(0);
-  const [pipes, setPipes] = useState<{ x: number; height: number; passed: boolean; scored: boolean }[]>([]);
+  const [pipes, setPipes] = useState<{ x: number; height: number; scored: boolean }[]>([]);
   const [isGameOver, setIsGameOver] = useState(false);
   const [score, setScore] = useState(0);
+  const [lastLevelUpScore, setLastLevelUpScore] = useState(0);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [isGameActive, setIsGameActive] = useState(false);
   const [showStartMessage, setShowStartMessage] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [currentLevel, setCurrentLevel] = useState(1);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [screenShakeActive, setScreenShakeActive] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const collisionRef = useRef<HTMLAudioElement | null>(null);
+  const levelUpRef = useRef<HTMLAudioElement | null>(null);
   const lastScoredPipeRef = useRef<number | null>(null);
 
-  // Initialize game over sound
+  // Initialize sounds
   useEffect(() => {
     audioRef.current = new Audio(gameOverSound);
     collisionRef.current = new Audio(collisionSound);
-    collisionRef.current.volume = 1.0; // Full volume for the collision sound
+    levelUpRef.current = new Audio(levelUpSound);
+    collisionRef.current.volume = 1.0;
+    if (levelUpRef.current) levelUpRef.current.volume = 1.0;
   }, []);
 
   // Handle background music
@@ -81,11 +100,15 @@ const Game: React.FC = () => {
     setVelocity(0);
     setPipes([]);
     setScore(0);
+    setLastLevelUpScore(0);
+    setCurrentLevel(1);
     setSpeedMultiplier(1);
     setIsGameOver(false);
     setShowStartMessage(true);
+    setShowLevelUp(false);
+    setIsAdvancedMode(false);
+    setScreenShakeActive(false);
     
-    // Start the game after 3 seconds
     setTimeout(() => {
       setIsGameActive(true);
       setShowStartMessage(false);
@@ -101,13 +124,17 @@ const Game: React.FC = () => {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
-        jump();
+        if (!isGameStarted) {
+          startGame();
+        } else {
+          jump();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [jump]);
+  }, [jump, isGameStarted]);
 
   useEffect(() => {
     if (!isGameStarted || isGameOver || !isGameActive) return;
@@ -132,65 +159,139 @@ const Game: React.FC = () => {
   useEffect(() => {
     if (!isGameStarted || isGameOver || !isGameActive) return;
 
-    const pipeGenerator = setInterval(() => {
-      const height = Math.random() * (400 - PIPE_GAP);
-      setPipes((prev) => [...prev, { x: 800, height, passed: false, scored: false }]);
-    }, PIPE_INTERVAL);
-
-    return () => clearInterval(pipeGenerator);
-  }, [isGameOver, isGameStarted, isGameActive]);
-
-  useEffect(() => {
-    if (!isGameStarted || isGameOver || !isGameActive) return;
-
     const pipeInterval = setInterval(() => {
-      setPipes((prev) => {
-        return prev
-          .map((pipe) => {
-            const newX = pipe.x - (BASE_PIPE_SPEED * speedMultiplier);
-            
-            const birdLeft = 50;
-            const birdRight = birdLeft + 40;
-            const birdTop = birdPosition;
-            const birdBottom = birdPosition + 40;
-            
-            const pipeLeft = newX;
-            const pipeRight = newX + 60;
-            
-            if (
-              birdRight > pipeLeft && 
-              birdLeft < pipeRight && 
-              (birdTop < pipe.height || birdBottom > pipe.height + PIPE_GAP)
-            ) {
-              setIsGameOver(true);
-              playCollisionSound();
-              playGameOverSound();
-            }
+      setPipes(prevPipes => {
+        return prevPipes.map(pipe => {
+          const currentSpeedMultiplier = isAdvancedMode ? 
+            speedMultiplier * (1 + ADVANCED_SPEED_BOOST) : 
+            speedMultiplier;
+          
+          const moveSpeed = isAdvancedMode ? 
+            BASE_PIPE_SPEED * currentSpeedMultiplier * 0.9 :
+            BASE_PIPE_SPEED * currentSpeedMultiplier;
+          
+          const newX = pipe.x - moveSpeed;
+          
+          const birdLeft = 50;
+          const birdRight = birdLeft + 40;
+          const birdTop = birdPosition;
+          const birdBottom = birdPosition + 40;
+          
+          const pipeLeft = newX;
+          const pipeRight = newX + 60;
+          
+          // Check collision
+          if (
+            birdRight > pipeLeft && 
+            birdLeft < pipeRight && 
+            (birdTop < pipe.height || birdBottom > pipe.height + PIPE_GAP)
+          ) {
+            setIsGameOver(true);
+            playCollisionSound();
+            playGameOverSound();
+          }
 
-            // Only score if pipe center passes bird center and hasn't been scored
-            const pipeCenter = newX + 30;
-            const birdCenter = birdLeft + 20;
-            
-            if (!pipe.scored && pipeCenter < birdCenter && pipe.x + 30 >= birdCenter) {
-              if (lastScoredPipeRef.current !== newX) {
-                setScore(s => s + 1);
-                setSpeedMultiplier(prev => prev + SPEED_INCREASE);
-                lastScoredPipeRef.current = newX;
-                return { ...pipe, x: newX, passed: true, scored: true };
-              }
-            }
+          // Score only if pipe hasn't been scored and has passed the bird
+          if (!pipe.scored && pipeRight < birdLeft) {
+            setScore(prev => prev + POINTS_PER_PIPE);
+            return { ...pipe, x: newX, scored: true };
+          }
 
-            return { ...pipe, x: newX };
-          })
-          .filter((pipe) => pipe.x > -100);
+          return { ...pipe, x: newX };
+        }).filter(pipe => pipe.x > -100);
       });
     }, 16);
 
     return () => clearInterval(pipeInterval);
-  }, [isGameOver, birdPosition, speedMultiplier, isGameStarted, isGameActive]);
+  }, [isGameOver, birdPosition, speedMultiplier, isGameStarted, isGameActive, isAdvancedMode]);
 
-  const restartGame = () => {
-    startGame();
+  useEffect(() => {
+    if (!isGameStarted || isGameOver || !isGameActive) return;
+
+    const pipeGenerator = setInterval(() => {
+      setPipes(prevPipes => {
+        if (isAdvancedMode && prevPipes.length >= MAX_PIPES_ADVANCED) {
+          return prevPipes;
+        }
+
+        const height = Math.random() * (400 - PIPE_GAP);
+        const baseX = isAdvancedMode ? ADVANCED_PIPE_SPACING : NORMAL_PIPE_SPACING;
+        
+        const adjustedHeight = isAdvancedMode ? 
+          Math.max(100, Math.min(height, 300)) :
+          height;
+        
+        if (isAdvancedMode && Math.random() < DOUBLE_PIPE_CHANCE) {
+          const height2 = Math.random() * (400 - PIPE_GAP);
+          const adjustedHeight2 = Math.max(100, Math.min(height2, 300));
+          return [
+            ...prevPipes, 
+            { x: baseX, height: adjustedHeight, scored: false },
+            { x: ADVANCED_DOUBLE_PIPE_SPACING, height: adjustedHeight2, scored: false }
+          ];
+        }
+        return [...prevPipes, { x: baseX, height: adjustedHeight, scored: false }];
+      });
+    }, isAdvancedMode ? ADVANCED_PIPE_INTERVAL : NORMAL_PIPE_INTERVAL);
+
+    return () => clearInterval(pipeGenerator);
+  }, [isGameOver, isGameStarted, isGameActive, isAdvancedMode]);
+
+  // Level up effect
+  useEffect(() => {
+    const shouldLevelUp = score > 0 && score - lastLevelUpScore >= POINTS_FOR_LEVEL_UP;
+    
+    if (shouldLevelUp) {
+      const nextLevel = currentLevel + 1;
+      setShowLevelUp(true);
+      setLastLevelUpScore(score);
+      setCurrentLevel(nextLevel);
+      setSpeedMultiplier(prev => prev + SPEED_INCREASE_PER_LEVEL);
+      
+      // Activate advanced mode at level 3
+      if (nextLevel === ADVANCED_MODE_LEVEL) {
+        setIsAdvancedMode(true);
+      }
+
+      // Screen shake effect
+      setScreenShakeActive(true);
+      setTimeout(() => setScreenShakeActive(false), 500);
+      
+      if (levelUpRef.current) {
+        levelUpRef.current.currentTime = 0;
+        levelUpRef.current.play();
+      }
+      
+      setTimeout(() => {
+        setShowLevelUp(false);
+      }, 1000);
+    }
+  }, [score, lastLevelUpScore, currentLevel]);
+  
+  // Update Pipe component styling
+  const getPipeStyle = (height: number, top: boolean) => {
+    const baseStyle = {
+      width: '60px',
+      height: `${height}px`,
+      position: 'absolute' as const,
+      top: top ? 0 : undefined,
+      bottom: top ? undefined : 0,
+    };
+
+    if (isAdvancedMode) {
+      return {
+        ...baseStyle,
+        background: 'linear-gradient(90deg, #330000 0%, #440000 50%, #330000 100%)',
+        boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.8)',
+        border: '1px solid rgba(80, 0, 0, 0.3)',
+        opacity: 0.85,
+      };
+    }
+
+    return {
+      ...baseStyle,
+      background: 'green',
+    };
   };
 
   return (
@@ -199,12 +300,53 @@ const Game: React.FC = () => {
       style={{
         height: '500px',
         width: '100%',
-        backgroundColor: 'lightblue',
+        backgroundColor: isAdvancedMode ? '#660000' : 'lightblue',
         position: 'relative',
         overflow: 'hidden',
         cursor: isGameStarted ? 'pointer' : 'default',
+        animation: screenShakeActive ? 'screenShake 0.5s ease-in-out' : 'none',
+        transition: 'background-color 1s ease',
       }}
     >
+      {/* Advanced mode visual effects */}
+      {isAdvancedMode && (
+        <>
+          <div className="fire-overlay" />
+          <div className="warning-text">ADVANCED MODE</div>
+        </>
+      )}
+
+      {showLevelUp && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '30%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 1000,
+            perspective: '1000px',
+            width: '90%',
+            maxWidth: '300px',
+            padding: '0 10px',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <div className="level-up-container">
+            <div className="level-up-text">
+              Level {currentLevel - 1} Complete
+              {currentLevel === ADVANCED_MODE_LEVEL && (
+                <div className="advanced-warning">PREPARE FOR ADVANCED MODE!</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showStartMessage && (
         <div
           style={{
@@ -303,8 +445,8 @@ const Game: React.FC = () => {
           <Bird position={birdPosition} velocity={velocity} />
           {pipes.map((pipe, i) => (
             <div key={i} style={{ position: 'absolute', left: pipe.x, top: 0, height: '100%' }}>
-              <Pipe height={pipe.height} top />
-              <Pipe height={500 - pipe.height - PIPE_GAP} top={false} />
+              <div style={getPipeStyle(pipe.height, true)} className={isAdvancedMode ? 'advanced-pipe' : ''} />
+              <div style={getPipeStyle(500 - pipe.height - PIPE_GAP, false)} className={isAdvancedMode ? 'advanced-pipe' : ''} />
             </div>
           ))}
           
@@ -341,7 +483,7 @@ const Game: React.FC = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  restartGame();
+                  startGame();
                 }}
                 style={{
                   padding: '10px 20px',
@@ -370,6 +512,253 @@ const Game: React.FC = () => {
             20% { opacity: 1; }
             80% { opacity: 1; }
             100% { opacity: 0; }
+          }
+
+          .fire-text-container {
+            position: relative;
+            display: inline-block;
+          }
+
+          .fire-text-container::before,
+          .fire-text-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, #ff0000, #ff7300, #fffb00, #ff0000);
+            background-size: 400% 400%;
+            animation: fireGradient 3s ease infinite;
+            filter: blur(20px);
+            opacity: 0.7;
+            z-index: -1;
+            border-radius: 10px;
+          }
+
+          .fire-text-container::after {
+            filter: blur(40px);
+            animation: fireGradient 3s ease infinite reverse;
+          }
+
+          @keyframes fireGradient {
+            0% {
+              background-position: 0% 50%;
+            }
+            50% {
+              background-position: 100% 50%;
+            }
+            100% {
+              background-position: 0% 50%;
+            }
+          }
+
+          @keyframes fireText {
+            0% {
+              opacity: 0;
+              transform: translateX(-50%) translateY(-30px) scale(0.8);
+            }
+            15% {
+              opacity: 0.9;
+              transform: translateX(-50%) translateY(0) scale(1.1);
+            }
+            25% {
+              transform: translateX(-50%) translateY(0) scale(1);
+            }
+            85% {
+              opacity: 0.9;
+              transform: translateX(-50%) translateY(0) scale(1);
+            }
+            100% {
+              opacity: 0;
+              transform: translateX(-50%) translateY(-30px) scale(0.8);
+            }
+          }
+
+          @keyframes flicker {
+            0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% {
+              opacity: 0.99;
+              text-shadow: 
+                -1px -1px 0 #FFA500, 
+                1px -1px 0 #FFA500, 
+                -1px 1px 0 #FFA500, 
+                1px 1px 0 #FFA500,
+                0 -2px 8px #FF8C00,
+                0 0 20px #FF4500,
+                0 0 30px #FF0000,
+                0 0 40px #FF8C00,
+                0 0 60px #FF4500,
+                0 0 80px #FF0000;
+            }
+            20%, 21.999%, 63%, 63.999%, 65%, 69.999% {
+              opacity: 0.4;
+              text-shadow: none;
+            }
+          }
+
+          .level-up-container {
+            text-align: center;
+            animation: levelUpAnim 1s ease-out forwards;
+            transform-style: preserve-3d;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            alignItems: center;
+            gap: 10px;
+          }
+
+          .level-up-text {
+            font-size: min(32px, 5vw);
+            color: ${isAdvancedMode ? '#ff3300' : 'rgba(255, 215, 0, 0.8)'};
+            text-shadow: 
+              0 0 8px ${isAdvancedMode ? 'rgba(255, 0, 0, 0.8)' : 'rgba(255, 140, 0, 0.6)'},
+              0 0 15px ${isAdvancedMode ? 'rgba(255, 0, 0, 0.6)' : 'rgba(255, 69, 0, 0.4)'};
+            margin: 0;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, ${isAdvancedMode ? '0.6' : '0.4'});
+            border-radius: 8px;
+            border: 1px solid ${isAdvancedMode ? 'rgba(255, 0, 0, 0.6)' : 'rgba(255, 215, 0, 0.4)'};
+            animation: ${isAdvancedMode ? 'advancedPulse' : 'pulseGlow'} 0.5s ease-in-out infinite alternate;
+            white-space: nowrap;
+            display: block;
+            min-width: min-content;
+            max-width: 100%;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+          }
+
+          @keyframes levelUpAnim {
+            0% {
+              opacity: 0;
+              transform: scale(0.8) translateY(20px);
+            }
+            20% {
+              opacity: 0.8;
+              transform: scale(1) translateY(0);
+            }
+            80% {
+              opacity: 0.8;
+              transform: scale(1) translateY(0);
+            }
+            100% {
+              opacity: 0;
+              transform: scale(0.8) translateY(-20px);
+            }
+          }
+
+          @keyframes pulseGlow {
+            from {
+              filter: brightness(0.9);
+            }
+            to {
+              filter: brightness(1.1);
+            }
+          }
+
+          .fire-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(0deg, 
+              rgba(255, 0, 0, 0.3) 0%,
+              transparent 20%,
+              transparent 80%,
+              rgba(255, 0, 0, 0.3) 100%
+            );
+            pointer-events: none;
+            animation: fireEffect 3s infinite alternate;
+            mix-blend-mode: screen;
+          }
+
+          .warning-text {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #ff0000;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #ff0000;
+            animation: warningPulse 1s infinite alternate;
+          }
+
+          .advanced-warning {
+            color: #ff0000;
+            font-size: 0.6em;
+            margin-top: 10px;
+            text-shadow: 0 0 10px #ff0000;
+            animation: warningPulse 0.5s infinite alternate;
+          }
+
+          @keyframes screenShake {
+            0%, 100% {
+              transform: translateX(0);
+            }
+            25% {
+              transform: translateX(-5px);
+            }
+            75% {
+              transform: translateX(5px);
+            }
+          }
+
+          @keyframes fireEffect {
+            0% {
+              opacity: 0.5;
+              transform: translateY(0);
+            }
+            50% {
+              opacity: ${isAdvancedMode ? '0.9' : '0.7'};
+              transform: translateY(-5px) scaleY(1.05);
+            }
+            100% {
+              opacity: 0.5;
+              transform: translateY(-10px);
+            }
+          }
+
+          @keyframes warningPulse {
+            from {
+              opacity: 0.7;
+              transform: scale(0.98);
+              text-shadow: 0 0 10px #ff0000;
+            }
+            to {
+              opacity: 1;
+              transform: scale(1.02);
+              text-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000;
+            }
+          }
+
+          @keyframes advancedPulse {
+            from {
+              filter: brightness(0.8) hue-rotate(-10deg);
+            }
+            to {
+              filter: brightness(1.2) hue-rotate(10deg);
+            }
+          }
+
+          .advanced-pipe {
+            animation: pipeFlicker 2s infinite alternate;
+            transition: all 0.3s ease;
+          }
+
+          @keyframes pipeFlicker {
+            0% {
+              opacity: 0.85;
+              filter: brightness(0.95) contrast(1);
+            }
+            50% {
+              opacity: 0.75;
+              filter: brightness(0.9) contrast(1.1);
+            }
+            100% {
+              opacity: 0.85;
+              filter: brightness(0.95) contrast(1);
+            }
           }
         `}
       </style>
