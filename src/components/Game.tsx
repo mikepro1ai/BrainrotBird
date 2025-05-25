@@ -6,7 +6,7 @@ import collisionSound from '../assets/wetfart.mp3';
 import backgroundMusic from '../assets/BasshunterDotA8bit.mp3';
 
 const GRAVITY = 0.5;
-const JUMP_FORCE = -8;
+const JUMP_FORCE = -6.4;
 const PIPE_GAP = 173;
 const PIPE_INTERVAL = 2000;
 const BASE_PIPE_SPEED = 5;
@@ -25,6 +25,8 @@ const Game: React.FC = () => {
   const [score, setScore] = useState(0);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const [isGameStarted, setIsGameStarted] = useState(false);
+  const [isGameActive, setIsGameActive] = useState(false);
+  const [showStartMessage, setShowStartMessage] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const collisionRef = useRef<HTMLAudioElement | null>(null);
   const lastScoredPipeRef = useRef<number | null>(null);
@@ -81,7 +83,13 @@ const Game: React.FC = () => {
     setScore(0);
     setSpeedMultiplier(1);
     setIsGameOver(false);
-    lastScoredPipeRef.current = null;
+    setShowStartMessage(true);
+    
+    // Start the game after 3 seconds
+    setTimeout(() => {
+      setIsGameActive(true);
+      setShowStartMessage(false);
+    }, 3000);
   };
 
   const jump = useCallback(() => {
@@ -102,7 +110,7 @@ const Game: React.FC = () => {
   }, [jump]);
 
   useEffect(() => {
-    if (!isGameStarted || isGameOver) return;
+    if (!isGameStarted || isGameOver || !isGameActive) return;
 
     const gameLoop = setInterval(() => {
       setBirdPosition((prev) => {
@@ -119,10 +127,10 @@ const Game: React.FC = () => {
     }, 20);
 
     return () => clearInterval(gameLoop);
-  }, [velocity, isGameOver, isGameStarted]);
+  }, [velocity, isGameOver, isGameStarted, isGameActive]);
 
   useEffect(() => {
-    if (!isGameStarted || isGameOver) return;
+    if (!isGameStarted || isGameOver || !isGameActive) return;
 
     const pipeGenerator = setInterval(() => {
       const height = Math.random() * (400 - PIPE_GAP);
@@ -130,10 +138,10 @@ const Game: React.FC = () => {
     }, PIPE_INTERVAL);
 
     return () => clearInterval(pipeGenerator);
-  }, [isGameOver, isGameStarted]);
+  }, [isGameOver, isGameStarted, isGameActive]);
 
   useEffect(() => {
-    if (!isGameStarted || isGameOver) return;
+    if (!isGameStarted || isGameOver || !isGameActive) return;
 
     const pipeInterval = setInterval(() => {
       setPipes((prev) => {
@@ -179,7 +187,7 @@ const Game: React.FC = () => {
     }, 16);
 
     return () => clearInterval(pipeInterval);
-  }, [isGameOver, birdPosition, speedMultiplier, isGameStarted]);
+  }, [isGameOver, birdPosition, speedMultiplier, isGameStarted, isGameActive]);
 
   const restartGame = () => {
     startGame();
@@ -197,6 +205,28 @@ const Game: React.FC = () => {
         cursor: isGameStarted ? 'pointer' : 'default',
       }}
     >
+      {showStartMessage && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            padding: '20px',
+            borderRadius: '10px',
+            boxShadow: '0 0 10px rgba(0, 0, 0, 0.2)',
+            zIndex: 100,
+            textAlign: 'center',
+            animation: 'fadeInOut 3s forwards'
+          }}
+        >
+          <p style={{ fontSize: '18px', color: '#333', margin: 0 }}>
+            tap on the screen or click your mouse to gain height
+          </p>
+        </div>
+      )}
+
       {/* Copyright notice and GitHub link */}
       <div
         style={{
@@ -332,6 +362,17 @@ const Game: React.FC = () => {
           )}
         </>
       )}
+
+      <style>
+        {`
+          @keyframes fadeInOut {
+            0% { opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+          }
+        `}
+      </style>
     </div>
   );
 };
