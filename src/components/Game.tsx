@@ -545,16 +545,14 @@ const Game: React.FC = () => {
             justify-content: center;
             align-items: center;
             width: 100%;
-            height: 100%;
-            min-height: 500px;
-            padding: 10px;
+            height: 100vh;
+            padding: 0;
             box-sizing: border-box;
           }
 
           .game-area {
             position: relative;
-            width: 100%;
-            max-width: 800px;
+            width: 500px;
             height: 500px;
             overflow: hidden;
             cursor: pointer;
@@ -893,14 +891,13 @@ const Game: React.FC = () => {
 
           @media (max-width: 768px) {
             .game-area {
-              border-radius: 0;
+              width: 100%;
               height: 100vh;
-              max-height: 100vh;
+              border-radius: 0;
             }
             
             .game-container {
               padding: 0;
-              height: 100vh;
             }
             
             .level-display {
@@ -919,12 +916,6 @@ const Game: React.FC = () => {
               font-size: 18px;
               top: 40px;
               right: 10px;
-            }
-          }
-          
-          @media (min-width: 769px) and (max-height: 600px) {
-            .game-area {
-              height: 450px;
             }
           }
         `}
