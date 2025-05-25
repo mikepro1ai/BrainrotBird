@@ -5,11 +5,11 @@ import gameOverSound from '../assets/bruh.mp3';
 import collisionSound from '../assets/wetfart.mp3';
 import backgroundMusic from '../assets/BasshunterDotA8bit.mp3';
 
-const GRAVITY = 0.7;
+const GRAVITY = 0.5;
 const JUMP_FORCE = -8;
-const PIPE_GAP = 150;
+const PIPE_GAP = 173;
 const PIPE_INTERVAL = 2000;
-const BASE_PIPE_SPEED = 6.25;
+const BASE_PIPE_SPEED = 5;
 const SPEED_INCREASE = 0.025; // 2.5% increase per pipe
 
 // Create a single music instance outside the component
@@ -211,7 +211,7 @@ const Game: React.FC = () => {
           textAlign: 'right'
         }}
       >
-        <div>© made by MikePro</div>
+        <div>© made by</div>
         <a
           href="https://github.com/mikepro1ai/"
           target="_blank"
