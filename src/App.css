@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&display=swap');
+
 .App {
   text-align: center;
   max-width: 800px;
@@ -125,6 +127,5 @@ button:hover {
   color: red; /* auffällig für Test */
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&display=swap');
 
 /* Danach deine Animationen und Klassen */
